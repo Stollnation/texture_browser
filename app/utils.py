@@ -100,7 +100,33 @@ def open_folder_in_explorer(path: Path) -> None:
     subprocess.Popen(["explorer", os.fspath(path)])
 
 
+def find_windows_photo_viewer() -> Path | None:
+    candidates = [
+        Path(os.environ.get("ProgramFiles", "")) / "Windows Photo Viewer" / "PhotoViewer.dll",
+        Path(os.environ.get("ProgramFiles(x86)", "")) / "Windows Photo Viewer" / "PhotoViewer.dll",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def open_image_in_default_viewer(path: Path) -> bool:
+    photo_viewer = find_windows_photo_viewer()
+    if photo_viewer is not None:
+        try:
+            subprocess.Popen(
+                [
+                    "rundll32.exe",
+                    f"{os.fspath(photo_viewer)},",
+                    "ImageView_Fullscreen",
+                    os.fspath(path),
+                ]
+            )
+            return True
+        except OSError:
+            pass
+
     if hasattr(os, "startfile"):
         try:
             os.startfile(os.fspath(path))
