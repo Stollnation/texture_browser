@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QImage, QKeySequence, QMouseEvent, QPixmap, QShortcut
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtGui import QImage, QKeySequence, QMouseEvent, QPixmap, QShortcut, QWheelEvent
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -44,6 +44,7 @@ class ViewerWindow(QDialog):
         self.scroll_area.setAlignment(Qt.AlignCenter)
         self.scroll_area.setWidgetResizable(False)
         self.scroll_area.setWidget(self.image_label)
+        self.scroll_area.viewport().installEventFilter(self)
 
         self.prev_item_button = QPushButton("Previous")
         self.next_item_button = QPushButton("Next")
@@ -56,7 +57,7 @@ class ViewerWindow(QDialog):
         self.next_frame_button.clicked.connect(lambda: self.step_frame(1))
 
         self.zoom_slider = QSlider(Qt.Horizontal)
-        self.zoom_slider.setRange(0, 100)
+        self.zoom_slider.setRange(0, 400)
         self.zoom_slider.setValue(0)
         self.zoom_slider.valueChanged.connect(self._apply_zoom)
         self.zoom_label = QLabel("Fit")
@@ -157,6 +158,12 @@ class ViewerWindow(QDialog):
         self.sequence_index = (self.sequence_index + delta) % frame_count
         self.refresh()
 
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self.scroll_area.viewport() and event.type() == QEvent.Wheel:
+            self._zoom_from_wheel(event)
+            return True
+        return super().eventFilter(watched, event)
+
     def _set_image(self, image: QImage) -> None:
         pixmap = QPixmap.fromImage(image)
         if pixmap.isNull():
@@ -193,6 +200,29 @@ class ViewerWindow(QDialog):
         pixmap = self.original_pixmap.scaled(scaled_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.image_label.setPixmap(pixmap)
         self.image_label.setFixedSize(pixmap.size())
+
+    def _fit_zoom_percent(self) -> int:
+        if self.original_pixmap.isNull():
+            return 100
+        viewport_size = self.scroll_area.viewport().size()
+        width_scale = viewport_size.width() / max(1, self.original_pixmap.width())
+        height_scale = viewport_size.height() / max(1, self.original_pixmap.height())
+        return max(10, min(400, int(min(width_scale, height_scale, 1.0) * 100)))
+
+    def _zoom_from_wheel(self, event: QWheelEvent) -> None:
+        delta = event.angleDelta().y()
+        if delta == 0:
+            delta = event.pixelDelta().y()
+        if delta == 0:
+            return
+
+        current = self.zoom_slider.value()
+        if current == 0:
+            current = self._fit_zoom_percent()
+        step = max(1, round(abs(delta) / 120 * 10))
+        value = current + step if delta > 0 else current - step
+        self.zoom_slider.setValue(max(10, min(400, value)))
+        event.accept()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

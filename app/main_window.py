@@ -32,7 +32,6 @@ from app.utils import (
     is_drive_root,
     open_fbx_in_viewer,
     open_folder_in_explorer,
-    open_image_in_default_viewer,
     open_video_in_vlc,
 )
 from app.viewer import ViewerWindow
@@ -336,21 +335,10 @@ class MainWindow(QMainWindow):
                 )
             return
 
-        if item.sequence is None:
-            if open_image_in_default_viewer(item.preview_path):
-                self.status_bar.showMessage(f"Opening image: {item.preview_path.name}")
-            else:
-                QMessageBox.warning(
-                    self,
-                    "Image Viewer Not Found",
-                    "No default image viewer could be found for this file.",
-                )
-            return
-
         items = [
             media_item
             for media_item in self.grid.filtered_items()
-            if media_item.sequence is not None and not media_item.is_video and not media_item.is_model
+            if not media_item.is_video and not media_item.is_model
         ]
         current_index = -1
         for index, media_item in enumerate(items):
