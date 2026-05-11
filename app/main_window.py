@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -83,6 +84,7 @@ class MainWindow(QMainWindow):
         self.grid.populationProgress.connect(self._handle_population_progress)
         self.grid.populationFinished.connect(self._handle_population_finished)
         self.grid.itemSelectionChanged.connect(self.update_selected_info)
+        self.grid.filesDropped.connect(self.import_dropped_files)
 
         size_bar = QHBoxLayout()
         size_bar.addWidget(QLabel("Thumbnails"))
@@ -385,6 +387,49 @@ class MainWindow(QMainWindow):
         self.favorites = [favorite for favorite in self.favorites if favorite != path]
         self.settings.save(self.favorites)
         self.folder_browser.set_favorites(self.favorites)
+
+    def import_dropped_files(self, paths: list[Path]) -> None:
+        if self.current_root is None or not self.current_root.is_dir() or is_drive_root(self.current_root):
+            self.status_bar.showMessage("Select a destination folder before dropping files.")
+            return
+
+        copied = 0
+        skipped = 0
+        for source in paths:
+            if not source.is_file():
+                skipped += 1
+                continue
+
+            destination = self._unique_drop_destination(self.current_root / source.name)
+            try:
+                if source.resolve() == destination.resolve():
+                    skipped += 1
+                    continue
+                shutil.copy2(source, destination)
+                copied += 1
+            except OSError:
+                skipped += 1
+
+        if copied:
+            self.status_bar.showMessage(f"Imported {copied} file(s) into {self.current_root}.")
+            self.select_folder(self.current_root)
+        elif skipped:
+            self.status_bar.showMessage("No files were imported.")
+
+    def _unique_drop_destination(self, destination: Path) -> Path:
+        if not destination.exists():
+            return destination
+
+        stem = destination.stem
+        suffix = destination.suffix
+        folder = destination.parent
+        index = 1
+        while True:
+            label = "copy" if index == 1 else f"copy {index}"
+            candidate = folder / f"{stem} {label}{suffix}"
+            if not candidate.exists():
+                return candidate
+            index += 1
 
     def open_folder_location(self, path: Path) -> None:
         open_folder_in_explorer(path)

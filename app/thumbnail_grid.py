@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QMimeData, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QListWidget,
     QListWidgetItem,
@@ -23,6 +24,7 @@ class ThumbnailGrid(QListWidget):
     visibleRangeChanged = Signal()
     populationFinished = Signal(int)
     populationProgress = Signal(int, int)
+    filesDropped = Signal(list)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -52,6 +54,12 @@ class ThumbnailGrid(QListWidget):
         self.setSpacing(12)
         self.setUniformItemSizes(True)
         self.setWordWrap(True)
+        self.setAcceptDrops(True)
+        self.setDragEnabled(True)
+        self.setDropIndicatorShown(True)
+        self.setDragDropMode(QAbstractItemView.DragDrop)
+        self.setDefaultDropAction(Qt.CopyAction)
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.itemDoubleClicked.connect(self._on_item_double_clicked)
         self.customContextMenuRequested.connect(self._show_context_menu)
@@ -169,6 +177,51 @@ class ThumbnailGrid(QListWidget):
             if item.preview_path == target.preview_path and item.display_name == target.display_name:
                 return index
         return -1
+
+    def mimeData(self, items: list[QListWidgetItem]) -> QMimeData:
+        mime_data = QMimeData()
+        paths: list[Path] = []
+        seen: set[Path] = set()
+        for item in items:
+            media_item = item.data(Qt.UserRole)
+            if media_item is None:
+                continue
+            item_paths = media_item.sequence.frame_paths if media_item.sequence else [media_item.preview_path]
+            for path in item_paths:
+                resolved = path.resolve()
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+                paths.append(resolved)
+        mime_data.setUrls([QUrl.fromLocalFile(str(path)) for path in paths])
+        return mime_data
+
+    def supportedDropActions(self):
+        return Qt.CopyAction
+
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            return
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event) -> None:
+        if not event.mimeData().hasUrls():
+            super().dropEvent(event)
+            return
+
+        paths = [Path(url.toLocalFile()) for url in event.mimeData().urls() if url.isLocalFile()]
+        if paths:
+            self.filesDropped.emit(paths)
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
 
     def eventFilter(self, watched, event) -> bool:
         if watched is self.viewport() and event.type() in {QEvent.Resize, QEvent.Paint, QEvent.Wheel}:
