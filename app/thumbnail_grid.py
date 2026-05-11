@@ -25,6 +25,7 @@ class ThumbnailGrid(QListWidget):
     populationFinished = Signal(int)
     populationProgress = Signal(int, int)
     filesDropped = Signal(list)
+    associatedRequested = Signal(MediaItem)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -245,10 +246,12 @@ class ThumbnailGrid(QListWidget):
         media_item = item.data(Qt.UserRole)
 
         menu = QMenu(self)
+        associated_action = QAction("Select associated", self)
         open_action = QAction("Open file location", self)
         copy_file_action = QAction("Copy file path", self)
         copy_folder_action = QAction("Copy folder path", self)
 
+        associated_action.triggered.connect(lambda: self.associatedRequested.emit(media_item))
         open_action.triggered.connect(lambda: open_in_explorer(media_item.preview_path))
         copy_file_action.triggered.connect(
             lambda: QApplication.clipboard().setText(str(media_item.preview_path))
@@ -257,6 +260,8 @@ class ThumbnailGrid(QListWidget):
             lambda: QApplication.clipboard().setText(str(media_item.folder))
         )
 
+        menu.addAction(associated_action)
+        menu.addSeparator()
         menu.addAction(open_action)
         menu.addAction(copy_file_action)
         menu.addAction(copy_folder_action)

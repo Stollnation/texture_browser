@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -85,6 +86,7 @@ class MainWindow(QMainWindow):
         self.grid.populationFinished.connect(self._handle_population_finished)
         self.grid.itemSelectionChanged.connect(self.update_selected_info)
         self.grid.filesDropped.connect(self.import_dropped_files)
+        self.grid.associatedRequested.connect(self.open_associated_viewer)
 
         size_bar = QHBoxLayout()
         size_bar.addWidget(QLabel("Thumbnails"))
@@ -99,6 +101,12 @@ class MainWindow(QMainWindow):
         self.fbx_checkbox.toggled.connect(lambda _checked: self.apply_filter(self.search_box.text()))
         size_bar.addSpacing(18)
         size_bar.addWidget(self.fbx_checkbox)
+        self.naming_convention_box = QLineEdit()
+        self.naming_convention_box.setPlaceholderText("metallic, albedo, roughness, normal")
+        self.naming_convention_box.setMinimumWidth(280)
+        size_bar.addSpacing(18)
+        size_bar.addWidget(QLabel("Naming convention"))
+        size_bar.addWidget(self.naming_convention_box, 1)
         size_bar.addStretch(1)
 
         self.info_label = QLabel("Select an item to see file info.")
@@ -473,6 +481,92 @@ class MainWindow(QMainWindow):
             current_index = 0
         viewer = ViewerWindow(items, current_index, self)
         viewer.exec()
+
+    def open_associated_viewer(self, item) -> None:
+        associated_items = self._associated_items_for(item)
+        if not associated_items:
+            self.status_bar.showMessage("No associated textures found.")
+            return
+
+        current_index = 0
+        for index, associated_item in enumerate(associated_items):
+            if associated_item.preview_path == item.preview_path and associated_item.display_name == item.display_name:
+                current_index = index
+                break
+
+        self.status_bar.showMessage(f"Showing {len(associated_items)} associated texture(s).")
+        viewer = ViewerWindow(associated_items, current_index, self)
+        viewer.exec()
+
+    def _associated_items_for(self, item) -> list:
+        if item.is_video or item.is_model:
+            return []
+
+        convention_terms = self._comma_terms(self.naming_convention_box.text())
+        search_terms = self._search_words(self.search_box.text())
+        source_terms = [
+            term
+            for term in self._unique_terms(search_terms + convention_terms)
+            if term in item.preview_path.stem.lower()
+        ]
+        if not source_terms and convention_terms:
+            source_terms = [term for term in convention_terms if term in item.preview_path.stem.lower()]
+        if not source_terms:
+            return [item]
+
+        candidates = [
+            media_item
+            for media_item in self.items
+            if media_item.folder == item.folder and not media_item.is_video and not media_item.is_model
+        ]
+
+        matches: dict[tuple[Path, str], object] = {}
+        for source_term in source_terms:
+            variant_terms = self._unique_terms([source_term] + convention_terms)
+            selected_key = self._variant_key(item.preview_path.stem, variant_terms)
+            for candidate in candidates:
+                if candidate.extension != item.extension:
+                    continue
+                if self._variant_key(candidate.preview_path.stem, variant_terms) == selected_key:
+                    matches[(candidate.preview_path, candidate.display_name)] = candidate
+
+        if (item.preview_path, item.display_name) not in matches:
+            matches[(item.preview_path, item.display_name)] = item
+
+        def sort_key(media_item) -> tuple[int, str]:
+            name = media_item.preview_path.stem.lower()
+            term_order = len(convention_terms) + 1
+            for index, term in enumerate(convention_terms):
+                if term in name:
+                    term_order = index + 1
+                    break
+            if media_item.preview_path == item.preview_path and media_item.display_name == item.display_name:
+                term_order = 0
+            return (term_order, media_item.display_name.lower())
+
+        return sorted(matches.values(), key=sort_key)
+
+    def _comma_terms(self, text: str) -> list[str]:
+        return self._unique_terms(term.strip().lower() for term in text.split(",") if term.strip())
+
+    def _search_words(self, text: str) -> list[str]:
+        return self._unique_terms(re.findall(r"[a-z0-9]+", text.lower()))
+
+    def _unique_terms(self, terms) -> list[str]:
+        unique = []
+        seen = set()
+        for term in terms:
+            if not term or term in seen:
+                continue
+            seen.add(term)
+            unique.append(term)
+        return unique
+
+    def _variant_key(self, stem: str, variant_terms: list[str]) -> str:
+        key = stem.lower()
+        for term in sorted(variant_terms, key=len, reverse=True):
+            key = key.replace(term, "{texture}")
+        return re.sub(r"[^a-z0-9{}]+", "_", key).strip("_")
 
     def _handle_population_progress(self, added_count: int, total_count: int) -> None:
         if self.current_scan is None:
