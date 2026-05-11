@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.associated_browser import AssociatedBrowserDialog
 from app.favorites import FavoritesStore
 from app.folder_tree import FolderBrowser
 from app.models import THUMBNAIL_DIMENSIONS, ThumbnailSize
@@ -495,8 +496,13 @@ class MainWindow(QMainWindow):
                 break
 
         self.status_bar.showMessage(f"Showing {len(associated_items)} associated texture(s).")
-        viewer = ViewerWindow(associated_items, current_index, self)
-        viewer.exec()
+        browser = AssociatedBrowserDialog(
+            associated_items,
+            current_index,
+            THUMBNAIL_DIMENSIONS[self.current_thumbnail_size],
+            self,
+        )
+        browser.exec()
 
     def _associated_items_for(self, item) -> list:
         if item.is_video or item.is_model:
