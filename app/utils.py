@@ -118,8 +118,7 @@ def open_image_in_default_viewer(path: Path) -> bool:
             subprocess.Popen(
                 [
                     "rundll32.exe",
-                    f"{os.fspath(photo_viewer)},",
-                    "ImageView_Fullscreen",
+                    f"{os.fspath(photo_viewer)},ImageView_Fullscreen",
                     os.fspath(path),
                 ]
             )
