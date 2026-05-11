@@ -336,7 +336,7 @@ class MainWindow(QMainWindow):
                 )
             return
 
-        if not item.is_sequence:
+        if item.sequence is None:
             if open_image_in_default_viewer(item.preview_path):
                 self.status_bar.showMessage(f"Opening image: {item.preview_path.name}")
             else:
@@ -347,7 +347,11 @@ class MainWindow(QMainWindow):
                 )
             return
 
-        items = [media_item for media_item in self.grid.filtered_items() if not media_item.is_video and not media_item.is_model]
+        items = [
+            media_item
+            for media_item in self.grid.filtered_items()
+            if media_item.sequence is not None and not media_item.is_video and not media_item.is_model
+        ]
         current_index = -1
         for index, media_item in enumerate(items):
             if media_item.preview_path == item.preview_path and media_item.display_name == item.display_name:
