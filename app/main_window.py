@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
 import os
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import QThreadPool, Qt, QTimer
+from PySide6.QtGui import QImageReader
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -29,6 +31,7 @@ from app.scanner import ScanWorker
 from app.thumbnail_grid import ThumbnailGrid
 from app.thumbnailer import ThumbnailWorker
 from app.utils import (
+    format_type_label,
     is_drive_root,
     open_fbx_in_viewer,
     open_folder_in_explorer,
@@ -79,6 +82,7 @@ class MainWindow(QMainWindow):
         self.grid.visibleRangeChanged.connect(self.request_visible_thumbnails)
         self.grid.populationProgress.connect(self._handle_population_progress)
         self.grid.populationFinished.connect(self._handle_population_finished)
+        self.grid.itemSelectionChanged.connect(self.update_selected_info)
 
         size_bar = QHBoxLayout()
         size_bar.addWidget(QLabel("Thumbnails"))
@@ -95,6 +99,13 @@ class MainWindow(QMainWindow):
         size_bar.addWidget(self.fbx_checkbox)
         size_bar.addStretch(1)
 
+        self.info_label = QLabel("Select an item to see file info.")
+        self.info_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.info_label.setWordWrap(True)
+        self.info_label.setStyleSheet(
+            "QLabel { color: #d7dde5; background: #2f343a; border: 1px solid #4a5058; padding: 6px 8px; }"
+        )
+
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -103,6 +114,7 @@ class MainWindow(QMainWindow):
         search_row.addWidget(self.browse_path_button)
         right_layout.addLayout(search_row)
         right_layout.addLayout(size_bar)
+        right_layout.addWidget(self.info_label)
         right_layout.addWidget(self.grid, 1)
 
         splitter = QSplitter()
@@ -196,6 +208,7 @@ class MainWindow(QMainWindow):
             self._reset_thumbnail_queue()
             self.items = []
             self.grid.reset_grid_state()
+            self.update_selected_info()
             self.status_bar.showMessage(f"Select a folder inside {path} to scan. Drive roots are skipped.")
             return
 
@@ -207,6 +220,7 @@ class MainWindow(QMainWindow):
         self.items = []
 
         self.grid.reset_grid_state()
+        self.update_selected_info()
         self.status_bar.showMessage(f"Scanning {path}...")
         self._scan_token += 1
         self._scan_found_count = 0
@@ -244,6 +258,7 @@ class MainWindow(QMainWindow):
         if scan_token != self._scan_token:
             return
         self._scan_found_count = found_count
+        self.update_selected_info()
         self.status_bar.showMessage(f"Found {self.grid.visible_count()} items")
 
     def _handle_scan_error(self, scan_token: int, message: str) -> None:
@@ -294,7 +309,71 @@ class MainWindow(QMainWindow):
     def apply_filter(self, text: str) -> None:
         self.grid.apply_filter(text, self.fbx_checkbox.isChecked())
         self.request_visible_thumbnails()
+        self.update_selected_info()
         self.status_bar.showMessage(f"Found {self.grid.visible_count()} items")
+
+    def update_selected_info(self) -> None:
+        current = self.grid.currentItem()
+        if current is None or current.isHidden():
+            self.info_label.setText("Select an item to see file info.")
+            return
+
+        item = current.data(Qt.UserRole)
+        if item is None:
+            self.info_label.setText("Select an item to see file info.")
+            return
+
+        info_parts = [format_type_label(item)]
+        path = item.preview_path
+
+        dimensions = self._image_dimensions_label(path)
+        if dimensions:
+            info_parts.append(dimensions)
+
+        if item.sequence:
+            frame_count = len(item.sequence.frame_paths)
+            info_parts.append(f"{frame_count} frames")
+
+        file_size = self._file_size_label(path)
+        if file_size:
+            info_parts.append(file_size)
+
+        modified = self._modified_label(path)
+        if modified:
+            info_parts.append(modified)
+
+        self.info_label.setText(f"{item.display_name}    " + "    |    ".join(info_parts))
+
+    def _image_dimensions_label(self, path: Path) -> str:
+        reader = QImageReader(str(path))
+        size = reader.size()
+        if not size.isValid():
+            return ""
+        return f"{size.width()} x {size.height()} px"
+
+    def _file_size_label(self, path: Path) -> str:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return ""
+
+        units = ["B", "KB", "MB", "GB"]
+        value = float(size)
+        for unit in units:
+            if value < 1024 or unit == units[-1]:
+                if unit == "B":
+                    return f"{int(value)} {unit}"
+                return f"{value:.1f} {unit}"
+            value /= 1024
+        return ""
+
+    def _modified_label(self, path: Path) -> str:
+        try:
+            timestamp = path.stat().st_mtime
+        except OSError:
+            return ""
+        modified = datetime.fromtimestamp(timestamp)
+        return f"Modified {modified:%Y-%m-%d %H:%M}"
 
     def add_favorite(self, path: Path) -> None:
         if path not in self.favorites:
