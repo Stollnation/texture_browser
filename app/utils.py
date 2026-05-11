@@ -115,14 +115,17 @@ def open_image_in_default_viewer(path: Path) -> bool:
     photo_viewer = find_windows_photo_viewer()
     if photo_viewer is not None:
         try:
-            subprocess.Popen(
+            process = subprocess.Popen(
                 [
                     "rundll32.exe",
                     f"{os.fspath(photo_viewer)},ImageView_Fullscreen",
                     os.fspath(path),
                 ]
             )
-            return True
+            try:
+                process.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                return True
         except OSError:
             pass
 
