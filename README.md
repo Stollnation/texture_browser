@@ -15,6 +15,7 @@ A lightweight Windows-oriented texture and media browser built with Python and P
 - Internal image viewer with fit-to-window zoom and frame stepping for sequences.
 - Video double-click handoff to VLC.
 - FBX double-click handoff to Blender or the default FBX app.
+- (and more!)
 
 ## Project Layout
 
