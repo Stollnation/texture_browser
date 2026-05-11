@@ -28,7 +28,13 @@ from app.models import THUMBNAIL_DIMENSIONS, ThumbnailSize
 from app.scanner import ScanWorker
 from app.thumbnail_grid import ThumbnailGrid
 from app.thumbnailer import ThumbnailWorker
-from app.utils import is_drive_root, open_fbx_in_viewer, open_folder_in_explorer, open_video_in_vlc
+from app.utils import (
+    is_drive_root,
+    open_fbx_in_viewer,
+    open_folder_in_explorer,
+    open_image_in_default_viewer,
+    open_video_in_vlc,
+)
 from app.viewer import ViewerWindow
 
 
@@ -327,6 +333,17 @@ class MainWindow(QMainWindow):
                     self,
                     "FBX Viewer Not Found",
                     "No FBX viewer could be found. Install Blender or set a default app for .fbx files.",
+                )
+            return
+
+        if not item.is_sequence:
+            if open_image_in_default_viewer(item.preview_path):
+                self.status_bar.showMessage(f"Opening image: {item.preview_path.name}")
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Image Viewer Not Found",
+                    "No default image viewer could be found for this file.",
                 )
             return
 

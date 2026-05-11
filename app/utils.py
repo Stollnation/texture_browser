@@ -100,6 +100,22 @@ def open_folder_in_explorer(path: Path) -> None:
     subprocess.Popen(["explorer", os.fspath(path)])
 
 
+def open_image_in_default_viewer(path: Path) -> bool:
+    try:
+        subprocess.Popen(["explorer", os.fspath(path)])
+        return True
+    except OSError:
+        pass
+
+    if hasattr(os, "startfile"):
+        try:
+            os.startfile(os.fspath(path))
+            return True
+        except OSError:
+            return False
+    return False
+
+
 def find_vlc_executable() -> Path | None:
     path = shutil.which("vlc")
     if path:
