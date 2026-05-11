@@ -37,6 +37,7 @@ class ThumbnailGrid(QListWidget):
         self._pending_items: list[MediaItem] = []
         self._added_count = 0
         self._filter_query = ""
+        self._filter_terms: list[str] = []
         self._fbx_only = False
         self._visible_count = 0
         self._visible_timer = QTimer(self)
@@ -109,6 +110,7 @@ class ThumbnailGrid(QListWidget):
     def apply_filter(self, text: str, fbx_only: bool = False) -> None:
         query = text.strip().lower()
         self._filter_query = query
+        self._filter_terms = [term.strip() for term in query.split(",") if term.strip()]
         self._fbx_only = fbx_only
         visible_count = 0
         for row in range(self.count()):
@@ -324,6 +326,5 @@ class ThumbnailGrid(QListWidget):
         return items
 
     def _is_hidden_by_filter(self, media_item: MediaItem) -> bool:
-        return (bool(self._filter_query) and self._filter_query not in media_item.search_text) or (
-            self._fbx_only and media_item.extension != ".fbx"
-        )
+        missing_required_term = any(term not in media_item.search_text for term in self._filter_terms)
+        return missing_required_term or (self._fbx_only and media_item.extension != ".fbx")
