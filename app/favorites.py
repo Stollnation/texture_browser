@@ -40,3 +40,9 @@ class FavoritesStore:
 
     def save_thumbnail_size(self, value: str) -> None:
         self.settings.setValue("thumbnail_size", value)
+
+    def load_naming_convention(self) -> str:
+        return self.settings.value("naming_convention", "", str)
+
+    def save_naming_convention(self, value: str) -> None:
+        self.settings.setValue("naming_convention", value)

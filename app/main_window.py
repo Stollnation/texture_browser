@@ -105,6 +105,7 @@ class MainWindow(QMainWindow):
         self.naming_convention_box = QLineEdit()
         self.naming_convention_box.setPlaceholderText("metallic, albedo, roughness, normal")
         self.naming_convention_box.setMinimumWidth(280)
+        self.naming_convention_box.textChanged.connect(self.save_naming_convention)
         size_bar.addSpacing(18)
         size_bar.addWidget(QLabel("Naming convention"))
         size_bar.addWidget(self.naming_convention_box, 1)
@@ -159,6 +160,7 @@ class MainWindow(QMainWindow):
         stored_size = self.settings.load_thumbnail_size()
         size_choice = ThumbnailSize(stored_size) if stored_size in {size.value for size in ThumbnailSize} else ThumbnailSize.MEDIUM
         self.set_thumbnail_size(size_choice)
+        self.naming_convention_box.setText(self.settings.load_naming_convention())
 
         last_root = self.settings.load_last_root()
         if last_root:
@@ -316,6 +318,9 @@ class MainWindow(QMainWindow):
         self._reset_thumbnail_queue()
         self.grid.set_thumbnail_size(THUMBNAIL_DIMENSIONS[size])
         self.request_visible_thumbnails()
+
+    def save_naming_convention(self, text: str) -> None:
+        self.settings.save_naming_convention(text)
 
     def apply_filter(self, text: str) -> None:
         self.grid.apply_filter(text, self.fbx_checkbox.isChecked())
