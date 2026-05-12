@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import ctypes
 import os
 import re
 import shutil
@@ -8,7 +9,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QThreadPool, Qt, QTimer
-from PySide6.QtGui import QImageReader
+from PySide6.QtGui import QIcon, QImageReader
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -41,6 +42,27 @@ from app.utils import (
     open_video_in_vlc,
 )
 from app.viewer import ViewerWindow
+
+
+APP_USER_MODEL_ID = "TextureBrowser.TextureBrowser"
+
+
+def resource_path(relative_path: str) -> Path:
+    base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    return base_path / relative_path
+
+
+def app_icon() -> QIcon:
+    return QIcon(str(resource_path("assets/app_icon.ico")))
+
+
+def set_windows_app_user_model_id() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+    except (AttributeError, OSError):
+        pass
 
 
 class MainWindow(QMainWindow):
@@ -617,11 +639,15 @@ class MainWindow(QMainWindow):
 
 
 def run() -> None:
+    set_windows_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName("Texture Browser")
     app.setOrganizationName("TextureBrowser")
+    icon = app_icon()
+    app.setWindowIcon(icon)
     app.setStyle("Fusion")
 
     window = MainWindow()
+    window.setWindowIcon(icon)
     window.show()
     sys.exit(app.exec())
